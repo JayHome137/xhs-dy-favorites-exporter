@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "XHS & Douyin Favorites Exporter",
+  "version": "0.1.0",
+  "description": "Export Xiaohongshu and Douyin web favorites to JSON.",
+  "action": {
+    "default_title": "Favorites Exporter"
+  },
+  "host_permissions": [
+    "https://www.xiaohongshu.com/*",
+    "https://www.douyin.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.xiaohongshu.com/*"
+      ],
+      "js": [
+        "xhs-content-script.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://www.douyin.com/*"
+      ],
+      "js": [
+        "douyin-content-script.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "page-bridge.js"
+      ],
+      "matches": [
+        "https://www.xiaohongshu.com/*"
+      ]
+    }
+  ]
+}
