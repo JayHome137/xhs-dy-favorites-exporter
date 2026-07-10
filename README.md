@@ -2,6 +2,8 @@
 
 一个 Chrome 扩展，在真实登录态下把小红书和抖音网页版收藏列表导出为结构化 JSON。另附可选的 Obsidian 导入脚本。
 
+小红书收藏导出部分参考了 [PCPrincipal67/xhs-favorites-exporter](https://github.com/PCPrincipal67/xhs-favorites-exporter) 的实现思路。
+
 不重放私有 API，不保存密码，不下载视频。它只在你已经登录的网页里，把你自己的收藏索引整理出来。
 
 手动导出是主流程；Chrome 自动操作和 Obsidian 导入都是可选步骤。不是 Codex 用户也可以直接忽略自动操作脚本。
