@@ -11,6 +11,7 @@
   var AUTO_SCROLL_DELAY_MS = 1400;
   var MAX_IDLE_ROUNDS = 6;
   var MAX_TITLE_LENGTH = 120;
+  var PANEL_COLLAPSED_KEY = "xhsPanelCollapsed";
 
   var state = {
     items: new Map(),
@@ -60,7 +61,7 @@
       .replace(/>/g, "&gt;");
   }
 
-  function ensurePanel() {
+  function ensurePanel(initialCollapsed) {
     if (ui.host) {
       return;
     }
@@ -228,17 +229,33 @@
     ui.scanButton.addEventListener("click", requestInitialSnapshot);
     ui.collapseButton.addEventListener("click", togglePanel);
 
+    setPanelCollapsed(initialCollapsed);
     (document.body || document.documentElement).appendChild(host);
     render();
   }
 
-  function togglePanel() {
-    var collapsed = ui.panel.classList.toggle("collapsed");
+  function setPanelCollapsed(collapsed) {
     var label = collapsed ? "展开面板" : "收起面板";
+    ui.panel.classList.toggle("collapsed", collapsed);
     ui.collapseButton.textContent = collapsed ? "+" : "-";
     ui.collapseButton.title = label;
     ui.collapseButton.setAttribute("aria-label", label);
     ui.collapseButton.setAttribute("aria-expanded", String(!collapsed));
+  }
+
+  function togglePanel() {
+    var collapsed = !ui.panel.classList.contains("collapsed");
+    var stored = {};
+    setPanelCollapsed(collapsed);
+    stored[PANEL_COLLAPSED_KEY] = collapsed;
+    chrome.storage.local.set(stored);
+  }
+
+  function mountPanel() {
+    chrome.storage.local.get(PANEL_COLLAPSED_KEY, function restorePanelState(stored) {
+      ensurePanel(stored[PANEL_COLLAPSED_KEY] === true);
+      scanDomCards();
+    });
   }
 
   function setStatus(text) {
@@ -686,14 +703,12 @@
       document.addEventListener(
         "DOMContentLoaded",
         function mountAfterDomReady() {
-          ensurePanel();
-          scanDomCards();
+          mountPanel();
         },
         { once: true }
       );
     } else {
-      ensurePanel();
-      scanDomCards();
+      mountPanel();
     }
   }
 
