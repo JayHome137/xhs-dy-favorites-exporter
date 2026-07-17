@@ -6,6 +6,8 @@
   var AUTO_SCROLL_DELAY_MS = 1200;
   var MAX_IDLE_ROUNDS = 5;
   var MAX_TITLE_LENGTH = 160;
+  var PANEL_COLLAPSED_KEY = "douyinPanelCollapsed";
+  var SERIALIZE_EVENT = "douyin-favorites-exporter:serialize";
 
   var state = {
     items: new Map(),
@@ -145,14 +147,22 @@
     render();
   }
 
-  function exportResults() {
+  function buildPayload() {
     scanDom();
-    var payload = {
+    return {
       exported_at: new Date().toISOString(),
       page_url: location.href,
       total_items: state.items.size,
       items: Array.from(state.items.values())
     };
+  }
+
+  function serializeResults() {
+    ui.host.setAttribute("data-export-payload", JSON.stringify(buildPayload()));
+  }
+
+  function exportResults() {
+    var payload = buildPayload();
 
     var blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
     var url = URL.createObjectURL(blob);
@@ -171,7 +181,7 @@
     render();
   }
 
-  function ensurePanel() {
+  function ensurePanel(initialCollapsed) {
     if (ui.host || !document.body) return;
 
     var host = document.createElement("div");
@@ -242,18 +252,35 @@
     ui.export.addEventListener("click", exportResults);
     ui.reset.addEventListener("click", resetResults);
     ui.collapse.addEventListener("click", togglePanel);
+    host.addEventListener(SERIALIZE_EVENT, serializeResults);
 
+    setPanelCollapsed(initialCollapsed);
     document.body.appendChild(host);
     render();
   }
 
-  function togglePanel() {
-    var collapsed = ui.panel.classList.toggle("collapsed");
+  function setPanelCollapsed(collapsed) {
     var label = collapsed ? "展开面板" : "收起面板";
+    ui.panel.classList.toggle("collapsed", collapsed);
     ui.collapse.textContent = collapsed ? "+" : "-";
     ui.collapse.title = label;
     ui.collapse.setAttribute("aria-label", label);
     ui.collapse.setAttribute("aria-expanded", String(!collapsed));
+  }
+
+  function togglePanel() {
+    var collapsed = !ui.panel.classList.contains("collapsed");
+    var stored = {};
+    setPanelCollapsed(collapsed);
+    stored[PANEL_COLLAPSED_KEY] = collapsed;
+    chrome.storage.local.set(stored);
+  }
+
+  function mountPanel() {
+    chrome.storage.local.get(PANEL_COLLAPSED_KEY, function restorePanelState(stored) {
+      ensurePanel(stored[PANEL_COLLAPSED_KEY] === true);
+      scanDom();
+    });
   }
 
   function render() {
@@ -266,8 +293,7 @@
   }
 
   function boot() {
-    ensurePanel();
-    scanDom();
+    mountPanel();
   }
 
   if (document.readyState === "loading") {
