@@ -185,7 +185,13 @@
     root.innerHTML =
       '<style>' +
       '#panel{width:300px;background:#fff;border:1px solid rgba(0,0,0,.14);border-radius:12px;box-shadow:0 16px 36px rgba(0,0,0,.16);font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue",sans-serif;color:#161823;padding:14px;}' +
-      '.title{font-size:15px;font-weight:700;margin-bottom:10px;}' +
+      '.header{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;}' +
+      '.title{font-size:15px;font-weight:700;}' +
+      '.collapse-toggle{width:28px;height:28px;padding:0;border-radius:7px;background:#f1f1f2;color:#161823;line-height:1;}' +
+      '#panel.collapsed{width:40px;padding:0;}' +
+      '#panel.collapsed .title,#panel.collapsed .panel-body{display:none;}' +
+      '#panel.collapsed .header{margin:0;}' +
+      '#panel.collapsed .collapse-toggle{width:40px;height:40px;}' +
       '.count{font-size:26px;font-weight:750;margin-bottom:8px;}' +
       '.status{font-size:12px;line-height:1.5;background:#f6f6f6;border-radius:8px;padding:9px;margin-bottom:10px;}' +
       '.buttons{display:grid;grid-template-columns:1fr 1fr;gap:8px;}' +
@@ -198,7 +204,11 @@
       '.hint{font-size:11px;line-height:1.45;color:#666;margin-top:10px;}' +
       '</style>' +
       '<div id="panel">' +
+      '<div class="header">' +
       '<div class="title">抖音收藏导出器</div>' +
+      '<button class="collapse-toggle" data-action="collapse" type="button" title="收起面板" aria-label="收起面板" aria-expanded="true">-</button>' +
+      '</div>' +
+      '<div class="panel-body">' +
       '<div class="count" data-role="count">0</div>' +
       '<div class="status" data-role="status">等待采集</div>' +
       '<div class="buttons">' +
@@ -209,9 +219,11 @@
       '<button class="warn" data-action="reset">清空本次结果</button>' +
       '</div>' +
       '<div class="hint">打开抖音个人页的收藏 Tab 后点击开始采集。第一版只读取网页已渲染的视频卡片。</div>' +
+      '</div>' +
       '</div>';
 
     ui.host = host;
+    ui.panel = root.querySelector("#panel");
     ui.count = root.querySelector('[data-role="count"]');
     ui.status = root.querySelector('[data-role="status"]');
     ui.start = root.querySelector('[data-action="start"]');
@@ -219,6 +231,7 @@
     ui.scan = root.querySelector('[data-action="scan"]');
     ui.export = root.querySelector('[data-action="export"]');
     ui.reset = root.querySelector('[data-action="reset"]');
+    ui.collapse = root.querySelector('[data-action="collapse"]');
 
     ui.start.addEventListener("click", startCollection);
     ui.stop.addEventListener("click", function () { stopCollection(); });
@@ -228,9 +241,19 @@
     });
     ui.export.addEventListener("click", exportResults);
     ui.reset.addEventListener("click", resetResults);
+    ui.collapse.addEventListener("click", togglePanel);
 
     document.body.appendChild(host);
     render();
+  }
+
+  function togglePanel() {
+    var collapsed = ui.panel.classList.toggle("collapsed");
+    var label = collapsed ? "展开面板" : "收起面板";
+    ui.collapse.textContent = collapsed ? "+" : "-";
+    ui.collapse.title = label;
+    ui.collapse.setAttribute("aria-label", label);
+    ui.collapse.setAttribute("aria-expanded", String(!collapsed));
   }
 
   function render() {

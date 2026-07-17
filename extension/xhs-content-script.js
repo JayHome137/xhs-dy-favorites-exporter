@@ -36,7 +36,9 @@
     stopButton: null,
     exportButton: null,
     resetButton: null,
-    scanButton: null
+    scanButton: null,
+    panel: null,
+    collapseButton: null
   };
 
   function injectPageBridge() {
@@ -83,10 +85,37 @@
       'color:#222;' +
       'padding:14px;' +
       '}' +
+      '.header{' +
+      'display:flex;' +
+      'align-items:center;' +
+      'justify-content:space-between;' +
+      'gap:8px;' +
+      'margin-bottom:10px;' +
+      '}' +
       '.title{' +
       'font-size:15px;' +
       'font-weight:700;' +
-      'margin-bottom:10px;' +
+      '}' +
+      '.collapse-toggle{' +
+      'width:28px;' +
+      'height:28px;' +
+      'padding:0;' +
+      'border-radius:7px;' +
+      'background:#f3f3f0;' +
+      'color:#222;' +
+      'line-height:1;' +
+      '}' +
+      '.collapse-toggle:hover{transform:none;}' +
+      '#panel.collapsed{' +
+      'width:40px;' +
+      'padding:0;' +
+      'background:#fff;' +
+      '}' +
+      '#panel.collapsed .title,#panel.collapsed .panel-body{display:none;}' +
+      '#panel.collapsed .header{margin:0;}' +
+      '#panel.collapsed .collapse-toggle{width:40px;height:40px;}' +
+      '.panel-body{' +
+      'display:block;' +
       '}' +
       '.meta{' +
       'display:grid;' +
@@ -154,7 +183,11 @@
       '}' +
       '</style>' +
       '<div id="panel">' +
+      '<div class="header">' +
       '<div class="title">小红书收藏导出器</div>' +
+      '<button class="collapse-toggle" data-action="collapse" type="button" title="收起面板" aria-label="收起面板" aria-expanded="true">-</button>' +
+      '</div>' +
+      '<div class="panel-body">' +
       '<div class="meta">' +
       '<div class="card"><div class="label">条目数</div><div class="value" data-role="count">0</div></div>' +
       '<div class="card"><div class="label">缺 token</div><div class="value" data-role="token-missing">0</div></div>' +
@@ -169,10 +202,12 @@
       '<button class="warn" data-action="reset" style="grid-column:1 / -1;">清空本次结果</button>' +
       '</div>' +
       '<div class="hint">先打开小红书个人页的“收藏”Tab，再刷新一次页面。插件会读首屏 SSR，并拦截后续收藏分页的 XHR。</div>' +
+      '</div>' +
       "</div>";
 
     ui.host = host;
     ui.shadow = root;
+    ui.panel = root.querySelector("#panel");
     ui.countValue = root.querySelector('[data-role="count"]');
     ui.tokenValue = root.querySelector('[data-role="token-missing"]');
     ui.sourceValue = root.querySelector('[data-role="sources"]');
@@ -182,6 +217,7 @@
     ui.exportButton = root.querySelector('[data-action="export"]');
     ui.resetButton = root.querySelector('[data-action="reset"]');
     ui.scanButton = root.querySelector('[data-action="scan"]');
+    ui.collapseButton = root.querySelector('[data-action="collapse"]');
 
     ui.startButton.addEventListener("click", startCollection);
     ui.stopButton.addEventListener("click", function handleStopClick() {
@@ -190,9 +226,19 @@
     ui.exportButton.addEventListener("click", exportResults);
     ui.resetButton.addEventListener("click", resetResults);
     ui.scanButton.addEventListener("click", requestInitialSnapshot);
+    ui.collapseButton.addEventListener("click", togglePanel);
 
     (document.body || document.documentElement).appendChild(host);
     render();
+  }
+
+  function togglePanel() {
+    var collapsed = ui.panel.classList.toggle("collapsed");
+    var label = collapsed ? "展开面板" : "收起面板";
+    ui.collapseButton.textContent = collapsed ? "+" : "-";
+    ui.collapseButton.title = label;
+    ui.collapseButton.setAttribute("aria-label", label);
+    ui.collapseButton.setAttribute("aria-expanded", String(!collapsed));
   }
 
   function setStatus(text) {
