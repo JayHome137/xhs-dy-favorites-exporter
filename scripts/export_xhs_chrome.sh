@@ -4,7 +4,7 @@ set -euo pipefail
 FAVORITES_URL="${1:-${XHS_FAVORITES_URL:-}}"
 DOWNLOAD_DIR="${DOWNLOAD_DIR:-$HOME/Downloads}"
 TIMEOUT_SECONDS="${EXPORT_TIMEOUT_SECONDS:-180}"
-PATTERN="xhs-favorites-*.json"
+PANEL_WAS_COLLAPSED=0
 
 if [[ -z "$FAVORITES_URL" ]]; then
   print -u2 "usage: XHS_FAVORITES_URL='https://www.xiaohongshu.com/user/profile/...?showTab=liked' $0"
@@ -64,19 +64,49 @@ click_action() {
 "
 }
 
-latest_new_file() {
-  local newest=""
-  local newest_mtime=0
-  local file mtime
-  for file in "$DOWNLOAD_DIR"/${~PATTERN}(N); do
-    mtime="$(stat -f %m "$file")"
-    if (( mtime >= START_EPOCH && mtime >= newest_mtime )); then
-      newest="$file"
-      newest_mtime="$mtime"
-    fi
-  done
-  [[ -n "$newest" ]] && print -r -- "$newest"
+serialize_payload() {
+  run_chrome_js '
+(() => {
+  const host = document.getElementById("xhs-favorites-exporter-host");
+  if (!host?.shadowRoot) return "";
+  host.removeAttribute("data-export-payload");
+  host.dispatchEvent(new Event("xhs-favorites-exporter:serialize"));
+  return host.getAttribute("data-export-payload") || "";
+})()
+'
 }
+
+expand_panel() {
+  run_chrome_js '
+(() => {
+  const root = document.getElementById("xhs-favorites-exporter-host")?.shadowRoot;
+  const panel = root?.querySelector("#panel");
+  const button = root?.querySelector("[data-action=collapse]");
+  if (!panel || !button) return "missing";
+  if (!panel.classList.contains("collapsed")) return "already-expanded";
+  button.click();
+  return "clicked";
+})()
+'
+}
+
+restore_panel() {
+  if (( PANEL_WAS_COLLAPSED == 0 )); then
+    return
+  fi
+  run_chrome_js '
+(() => {
+  const root = document.getElementById("xhs-favorites-exporter-host")?.shadowRoot;
+  const panel = root?.querySelector("#panel");
+  const button = root?.querySelector("[data-action=collapse]");
+  if (!panel || !button || panel.classList.contains("collapsed")) return;
+  button.click();
+})()
+' >/dev/null 2>&1 || true
+  PANEL_WAS_COLLAPSED=0
+}
+
+trap restore_panel EXIT
 
 START_EPOCH="$(date +%s)"
 open_chrome_url "$FAVORITES_URL"
@@ -92,6 +122,14 @@ done
 
 if [[ "${state:-}" != *'"hasHost":true'* ]]; then
   print -u2 "未找到小红书导出面板。请确认扩展已安装启用，并且当前页面是小红书网页。"
+  exit 1
+fi
+
+panel_result="$(expand_panel)"
+if [[ "$panel_result" == "clicked" ]]; then
+  PANEL_WAS_COLLAPSED=1
+elif [[ "$panel_result" != "already-expanded" ]]; then
+  print -u2 "无法展开小红书导出面板：$panel_result"
   exit 1
 fi
 
@@ -115,16 +153,16 @@ if [[ "$state" == *'"count":"0"'* || "$state" == *'"exportDisabled":true'* ]]; t
   exit 1
 fi
 
-click_action export >/dev/null
+payload="$(serialize_payload)"
+if [[ -z "$payload" ]]; then
+  print -u2 "无法读取小红书采集结果"
+  exit 1
+fi
 
-while (( $(date +%s) < deadline )); do
-  exported="$(latest_new_file || true)"
-  if [[ -n "$exported" ]]; then
-    print -r -- "$exported"
-    exit 0
-  fi
-  sleep 1
-done
+mkdir -p "$DOWNLOAD_DIR"
+exported="$DOWNLOAD_DIR/xhs-favorites-$(date -u '+%Y-%m-%dT%H-%M-%SZ').json"
+print -r -- "$payload" > "$exported"
+/usr/bin/python3 -m json.tool "$exported" >/dev/null
 
-print -u2 "已触发导出，但未在 $DOWNLOAD_DIR 找到新的 $PATTERN"
-exit 1
+restore_panel
+print -r -- "$exported"

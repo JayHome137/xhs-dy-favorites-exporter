@@ -12,6 +12,7 @@
   var MAX_IDLE_ROUNDS = 6;
   var MAX_TITLE_LENGTH = 120;
   var PANEL_COLLAPSED_KEY = "xhsPanelCollapsed";
+  var SERIALIZE_EVENT = "xhs-favorites-exporter:serialize";
 
   var state = {
     items: new Map(),
@@ -228,6 +229,7 @@
     ui.resetButton.addEventListener("click", resetResults);
     ui.scanButton.addEventListener("click", requestInitialSnapshot);
     ui.collapseButton.addEventListener("click", togglePanel);
+    host.addEventListener(SERIALIZE_EVENT, serializeResults);
 
     setPanelCollapsed(initialCollapsed);
     (document.body || document.documentElement).appendChild(host);
@@ -617,17 +619,16 @@
     render();
   }
 
-  function exportResults() {
+  function buildPayload() {
     if (state.items.size === 0) {
-      setStatus("当前没有可导出的结果");
-      return;
+      return null;
     }
 
     var items = Array.from(state.items.values()).sort(function sortByTime(left, right) {
       return String(left.first_seen_at).localeCompare(String(right.first_seen_at));
     });
 
-    var payload = {
+    return {
       exported_at: new Date().toISOString(),
       page_url: window.location.href,
       total_items: items.length,
@@ -635,6 +636,23 @@
       page_info: state.pageInfo,
       items: items
     };
+  }
+
+  function serializeResults() {
+    var payload = buildPayload();
+    if (!payload) {
+      ui.host.removeAttribute("data-export-payload");
+      return;
+    }
+    ui.host.setAttribute("data-export-payload", JSON.stringify(payload));
+  }
+
+  function exportResults() {
+    var payload = buildPayload();
+    if (!payload) {
+      setStatus("当前没有可导出的结果");
+      return;
+    }
 
     var blob = new Blob([JSON.stringify(payload, null, 2)], {
       type: "application/json"
@@ -654,7 +672,7 @@
     anchor.remove();
     URL.revokeObjectURL(url);
 
-    setStatus("已导出 " + items.length + " 条到 " + fileName);
+    setStatus("已导出 " + payload.items.length + " 条到 " + fileName);
   }
 
   function handleBridgeMessage(event) {
