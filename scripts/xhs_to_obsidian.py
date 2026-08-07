@@ -1,3 +1,4 @@
+import html
 import json
 import re
 import sys
@@ -22,6 +23,8 @@ CATEGORY_RULES = [
     ("购物好物", ("好物", "购物", "平替", "测评", "开箱", "清单", "配饰")),
 ]
 
+SUMMARY_MAX_LENGTH = 280
+
 
 def category_for(title, author=""):
     haystack = f"{title or ''} {author or ''}".lower()
@@ -43,6 +46,37 @@ def clean_title(raw_title, note_id):
     if not title or re.fullmatch(r"[0-9a-fA-F]{16,32}", title):
         return f"无标题-{note_id}"
     return title
+
+
+def clean_content_text(value):
+    text = html.unescape(str(value or ""))
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"#([^#\s]+)#", r"\1", text)
+    text = re.sub(r"(?<!\S)#([^\s#]+)", r"\1", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def summarize_content(item, title):
+    raw = (
+        item.get("content_excerpt")
+        or item.get("content_text")
+        or item.get("description")
+        or item.get("desc")
+    )
+    text = clean_content_text(raw)
+    normalized_title = clean_content_text(title)
+
+    if normalized_title and text.startswith(normalized_title):
+        text = text[len(normalized_title):].lstrip(" ：:，,-—")
+
+    if not text or text == normalized_title:
+        return "仅获取到页面标题，暂无可用正文描述。"
+
+    sentences = [part.strip() for part in re.findall(r"[^。！？!?]+[。！？!?]?", text) if part.strip()]
+    summary = "".join(sentences[:2]) or text
+    if len(summary) > SUMMARY_MAX_LENGTH:
+        summary = summary[:SUMMARY_MAX_LENGTH].rstrip(" ，,。；;") + "..."
+    return summary
 
 
 def yaml_string(value):
@@ -89,6 +123,7 @@ def note_body(number, title, category, created, note_id, item):
     url = item_url(item, note_id)
     cover = item.get("cover")
     cover_line = f"[打开封面]({cover})" if cover else "无"
+    summary = summarize_content(item, title)
     return f"""---
 id: XHS-{number}
 source: xiaohongshu
@@ -102,7 +137,9 @@ original_url: {yaml_string(url)}
 # {number}. {title}
 
 ## 摘要
-待补充。
+{summary}
+
+> 来源：页面文字，未分析图片、视频画面或语音。
 
 ## 信息
 - 作者：{item.get("author") or "未知"}

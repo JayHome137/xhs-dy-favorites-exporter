@@ -6,6 +6,7 @@
   var AUTO_SCROLL_DELAY_MS = 1200;
   var MAX_IDLE_ROUNDS = 5;
   var MAX_TITLE_LENGTH = 160;
+  var MAX_CONTENT_LENGTH = 2000;
   var PANEL_COLLAPSED_KEY = "douyinPanelCollapsed";
   var SERIALIZE_EVENT = "douyin-favorites-exporter:serialize";
 
@@ -28,6 +29,11 @@
     return result ? result.slice(0, MAX_TITLE_LENGTH) : "无标题";
   }
 
+  function clampContent(value) {
+    var result = text(value);
+    return result ? result.slice(0, MAX_CONTENT_LENGTH) : null;
+  }
+
   function absoluteUrl(href) {
     try {
       return new URL(href, location.href).href;
@@ -44,7 +50,13 @@
     var image = anchor.querySelector("img");
     var alt = text(image && image.getAttribute("alt"));
     var author = "";
-    var title = alt || text(anchor.textContent);
+    var anchorText = text(anchor.textContent);
+    var title = alt || anchorText;
+    var contentText =
+      text(anchor.getAttribute("title")) ||
+      text(anchor.getAttribute("aria-label")) ||
+      anchorText ||
+      alt;
     var colonIndex = title.indexOf("：");
 
     if (colonIndex > 0 && colonIndex < 40) {
@@ -55,6 +67,7 @@
     return {
       aweme_id: match[1],
       title: clampTitle(title),
+      content_text: clampContent(contentText),
       author: author,
       url: url,
       cover: image ? image.src : null,

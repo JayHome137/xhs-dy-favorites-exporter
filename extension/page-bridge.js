@@ -105,6 +105,15 @@
     return value == null ? null : String(value);
   }
 
+  function toTextOrNull(value) {
+    if (typeof value === "string") {
+      var text = value.replace(/\s+/g, " ").trim();
+      return text || null;
+    }
+
+    return typeof value === "number" ? String(value) : null;
+  }
+
   function normalizeFavoriteItem(rawItem, source) {
     var item = unwrapReactive(rawItem) || {};
     var noteCard = unwrapReactive(item.noteCard) || item;
@@ -143,6 +152,19 @@
       item.title
     ]);
 
+    var contentText = pickFirst([
+      noteCard.desc,
+      noteCard.description,
+      noteCard.content,
+      noteCard.noteDesc,
+      noteCard.note_desc,
+      item.desc,
+      item.description,
+      item.content,
+      item.noteDesc,
+      item.note_desc
+    ]);
+
     var author = pickFirst([
       user.nickName,
       user.nick_name,
@@ -165,6 +187,7 @@
       xsec_token: toStringOrNull(xsecToken),
       url: url,
       title: toStringOrNull(title),
+      content_text: toTextOrNull(contentText),
       author: toStringOrNull(author),
       cover: toStringOrNull(resolveCover(noteCard)),
       liked_count: toStringOrNull(likedCount),

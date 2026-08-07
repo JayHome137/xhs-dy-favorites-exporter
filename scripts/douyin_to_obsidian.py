@@ -1,3 +1,4 @@
+import html
 import json
 import re
 import sys
@@ -20,6 +21,13 @@ CATEGORY_RULES = [
     ("美妆护肤", ("化妆", "通勤妆", "美妆", "毛戈平")),
     ("情感成长", ("会好", "迟早")),
 ]
+
+SUMMARY_MAX_LENGTH = 280
+SUMMARY_SOURCE = "> 来源：页面文字，未分析视频画面或语音。"
+SUMMARY_PLACEHOLDERS = (
+    "待补充。",
+    "仅获取到页面标题，暂无可用正文描述。",
+)
 
 
 def matches_keyword(haystack, keyword):
@@ -45,6 +53,37 @@ def safe_filename(text):
 def clean_title(value, aweme_id):
     title = re.sub(r"\s+", " ", str(value or "")).strip()
     return title
+
+
+def clean_content_text(value):
+    text = html.unescape(str(value or ""))
+    text = re.sub(r"https?://\S+", "", text)
+    text = re.sub(r"#([^#\s]+)#", r"\1", text)
+    text = re.sub(r"(?<!\S)#([^\s#]+)", r"\1", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def summarize_content(item, title):
+    raw = (
+        item.get("content_excerpt")
+        or item.get("content_text")
+        or item.get("description")
+        or item.get("desc")
+    )
+    text = clean_content_text(raw)
+    normalized_title = clean_content_text(title)
+
+    if normalized_title and text.startswith(normalized_title):
+        text = text[len(normalized_title):].lstrip(" ：:，,-—")
+
+    if not text or text == normalized_title:
+        return "仅获取到页面标题，暂无可用正文描述。"
+
+    sentences = [part.strip() for part in re.findall(r"[^。！？!?]+[。！？!?]?", text) if part.strip()]
+    summary = "".join(sentences[:2]) or text
+    if len(summary) > SUMMARY_MAX_LENGTH:
+        summary = summary[:SUMMARY_MAX_LENGTH].rstrip(" ，,。；;") + "..."
+    return summary
 
 
 def yaml_string(value):
@@ -107,6 +146,7 @@ def note_body(number, title, category, created, aweme_id, item):
     url = item.get("url") or f"https://www.douyin.com/video/{aweme_id}"
     cover = item.get("cover")
     cover_line = f"[打开封面]({cover})" if cover else "无"
+    summary = summarize_content(item, title)
     return f"""---
 id: DOUYIN-{number}
 source: douyin
@@ -120,7 +160,9 @@ original_url: {yaml_string(url)}
 # {number}. {title}
 
 ## 摘要
-待补充。
+{summary}
+
+> 来源：页面文字，未分析视频画面或语音。
 
 ## 信息
 - 作者：{item.get("author") or "未知"}
@@ -145,6 +187,39 @@ def update_existing_body(path, number, title, category, url):
     text = re.sub(r"^#\s+\d{3}\.\s+.*$", f"# {number}. {title}", text, count=1, flags=re.MULTILINE)
     text = re.sub(r"\[打开原收藏\]\([^)]+\)", f"[打开原收藏]({url})", text, count=1)
     path.write_text(text, encoding="utf-8")
+
+
+def backfill_summaries(payload, vault_path):
+    douyin_root = Path(vault_path) / "平台收藏" / "抖音"
+    existing = existing_notes(douyin_root)
+    placeholder_pattern = "|".join(re.escape(value) for value in SUMMARY_PLACEHOLDERS)
+    block_pattern = rf"(## 摘要\n)(?:{placeholder_pattern})(?:\n\n> 来源：[^\n]+)?"
+    updated = 0
+
+    for record in export_records(payload):
+        note = existing.get(record["aweme_id"])
+        if not note or not record["item"].get("content_text"):
+            continue
+
+        summary = summarize_content(record["item"], record["title"])
+        if summary in SUMMARY_PLACEHOLDERS:
+            continue
+
+        path = note["path"]
+        text = path.read_text(encoding="utf-8", errors="replace")
+        replaced, count = re.subn(
+            block_pattern,
+            lambda match: f"{match.group(1)}{summary}\n\n{SUMMARY_SOURCE}",
+            text,
+            count=1,
+        )
+        if count:
+            temporary = path.with_name(f".{path.name}.tmp")
+            temporary.write_text(replaced, encoding="utf-8")
+            temporary.replace(path)
+            updated += 1
+
+    return updated
 
 
 def prune_empty_dirs(root):
@@ -233,8 +308,13 @@ def convert_export(input_path, vault_path, sync_current=False):
 
 if __name__ == "__main__":
     sync_current = "--sync-current" in sys.argv
-    args = [arg for arg in sys.argv[1:] if arg != "--sync-current"]
+    backfill_only = "--backfill-only" in sys.argv
+    args = [arg for arg in sys.argv[1:] if arg not in ("--sync-current", "--backfill-only")]
     if len(args) != 2:
-        raise SystemExit("usage: python3 douyin_to_obsidian.py [--sync-current] douyin-favorites.json /path/to/ObsidianVault")
-    for path in convert_export(args[0], args[1], sync_current=sync_current):
-        print(path)
+        raise SystemExit("usage: python3 douyin_to_obsidian.py [--sync-current|--backfill-only] douyin-favorites.json /path/to/ObsidianVault")
+    if backfill_only:
+        payload = json.loads(Path(args[0]).read_text(encoding="utf-8"))
+        print(f"backfilled={backfill_summaries(payload, args[1])}")
+    else:
+        for path in convert_export(args[0], args[1], sync_current=sync_current):
+            print(path)

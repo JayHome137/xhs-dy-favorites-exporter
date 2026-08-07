@@ -5,6 +5,7 @@ VAULT_PATH="${1:-}"
 JSON_PATH="${2:-}"
 DOWNLOAD_DIR="${DOWNLOAD_DIR:-$HOME/Downloads}"
 SCRIPT_DIR="${0:A:h}"
+SCRAPLING_BIN="${SCRAPLING_BIN:-$(command -v scrapling || true)}"
 
 if [[ -z "$VAULT_PATH" ]]; then
   print -u2 "usage: $0 /path/to/ObsidianVault [xhs-favorites.json]"
@@ -27,6 +28,14 @@ fi
 if [[ -z "$JSON_PATH" || ! -f "$JSON_PATH" ]]; then
   print -u2 "没有找到可导入的小红书 JSON。"
   exit 1
+fi
+
+if [[ -n "$SCRAPLING_BIN" && -x "$SCRAPLING_BIN" ]]; then
+  python3 "$SCRIPT_DIR/enrich_xhs_with_scrapling.py" \
+    --scrapling-bin "$SCRAPLING_BIN" \
+    "$JSON_PATH" "$VAULT_PATH"
+else
+  print -u2 "未找到 Scrapling，跳过小红书正文补全。"
 fi
 
 python3 "$SCRIPT_DIR/xhs_to_obsidian.py" --skip-uncategorized --sync-current "$JSON_PATH" "$VAULT_PATH"

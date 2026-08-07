@@ -11,6 +11,7 @@
   var AUTO_SCROLL_DELAY_MS = 1400;
   var MAX_IDLE_ROUNDS = 6;
   var MAX_TITLE_LENGTH = 120;
+  var MAX_CONTENT_LENGTH = 4000;
   var PANEL_COLLAPSED_KEY = "xhsPanelCollapsed";
   var SERIALIZE_EVENT = "xhs-favorites-exporter:serialize";
 
@@ -279,6 +280,16 @@
     return text.slice(0, MAX_TITLE_LENGTH);
   }
 
+  function normalizeContentText(value) {
+    if (value == null) {
+      return null;
+    }
+
+    var text = String(value).replace(/\s+/g, " ").trim();
+
+    return text ? text.slice(0, MAX_CONTENT_LENGTH) : null;
+  }
+
   function buildExploreUrl(noteId, token) {
     var baseUrl = "https://www.xiaohongshu.com/explore/" + encodeURIComponent(String(noteId));
     return token
@@ -304,6 +315,7 @@
       xsec_token: token,
       url: input.url || buildExploreUrl(noteId, token),
       title: normalizeText(input.title),
+      content_text: normalizeContentText(input.content_text),
       author: normalizeText(input.author),
       cover: input.cover || null,
       liked_count: input.liked_count == null ? null : String(input.liked_count),
@@ -323,6 +335,7 @@
           xsec_token: existing.xsec_token,
           url: existing.url,
           title: existing.title,
+          content_text: existing.content_text,
           author: existing.author,
           cover: existing.cover,
           liked_count: existing.liked_count,
@@ -336,6 +349,7 @@
           xsec_token: null,
           url: null,
           title: null,
+          content_text: null,
           author: null,
           cover: null,
           liked_count: null,
@@ -349,6 +363,7 @@
       "xsec_token",
       "url",
       "title",
+      "content_text",
       "author",
       "cover",
       "liked_count",

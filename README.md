@@ -22,6 +22,8 @@
   - `平台收藏/小红书/<分类>/*.md`
   - `平台收藏/抖音收藏整理.md`
   - `平台收藏/抖音/<分类>/*.md`
+- Obsidian 新笔记会根据页面已有文字生成最多两句的内容概览；没有正文时会明确标记，不分析图片、视频画面或语音。
+- 可选使用 Scrapling 从公开小红书详情页补全正文，只处理尚未导入 Obsidian 的新 `note_id`，不读取 Chrome Cookie。
 - 可选 Chrome 自动操作：用脚本打开收藏页、临时展开面板并导出 JSON，完成后恢复原来的收起状态。
 
 ## 安装扩展
@@ -88,6 +90,7 @@ Chrome 登录平台
 | `xsec_token` | 详情页访问 token |
 | `url` | 带 token 的完整链接 |
 | `title` | 标题 |
+| `content_text` | 页面提供的正文或描述；收藏列表没有提供时为空 |
 | `author` | 作者昵称 |
 | `cover` | 封面图链接 |
 | `liked_count` | 点赞数 |
@@ -101,6 +104,7 @@ Chrome 登录平台
 | `aweme_id` | 抖音视频 ID |
 | `url` | 视频链接 |
 | `title` | 标题或描述 |
+| `content_text` | 网页卡片提供的描述；没有提供时为空 |
 | `author` | 作者昵称 |
 | `cover` | 封面图链接 |
 | `note_type` | 类型，当前主要是 `video` |
@@ -134,6 +138,25 @@ python3 scripts/douyin_to_obsidian.py --sync-current \
 | `--skip-uncategorized` | 小红书导入时跳过无法归类的条目 |
 
 导入脚本会按 `note_id` / `aweme_id` 去重。已有笔记不会整篇重写，只更新编号、分类、标题和原链接，尽量保留你在 Obsidian 里手写的内容。
+
+导入器会把 `content_text` 清理成最多两句、280 字以内的内容概览。这个过程完全在本机执行，不调用大模型或外部摘要服务。页面没有提供正文时，笔记会显示“仅获取到页面标题，暂无可用正文描述”。
+
+### 可选：用 Scrapling 补全小红书正文
+
+小红书收藏列表通常只有标题。安装 [Scrapling](https://github.com/D4Vinci/Scrapling) 后，可以在导入前读取公开详情页文字：
+
+```bash
+scrapling extract --help
+python3 scripts/enrich_xhs_with_scrapling.py \
+  ~/Downloads/xhs-favorites-xxxx.json \
+  /path/to/ObsidianVault
+```
+
+补全器只访问 JSON 中已经存在的 `xiaohongshu.com` 原链接，不读取或传递 Chrome Cookie，不访问第三方摘要服务。默认跳过 Vault 中已有的 `note_id`，避免每周重复抓取旧收藏。`scripts/import_xhs_to_obsidian.sh` 检测到本机已安装 Scrapling 时会自动执行这一步；未安装时仍可正常导入，只是没有正文的条目会使用明确的占位说明。
+
+需要一次性补齐旧笔记时，可以显式使用 `--include-existing --backfill`。回填只替换“待补充”或自动占位说明，不重建索引、不改编号和分类，也不覆盖手写摘要。不要把这两个参数加入每周任务。
+
+抖音没有接入 Scrapling。实测其公开详情页经常只返回登录页面，因此抖音概览仅使用 Chrome 页面已经提供的描述，避免把登录凭据交给额外抓取工具。
 
 也可以使用导入辅助脚本。它会自动选择下载目录里最新的对应 JSON，并且只在导入成功后删除本次导入的 JSON。
 
@@ -220,6 +243,7 @@ scripts/import_douyin_to_obsidian.sh /path/to/ObsidianVault
       "xsec_token": "ABCD1234",
       "url": "https://www.xiaohongshu.com/explore/6805d5dc000000001c0328ce?xsec_token=ABCD1234",
       "title": "示例标题",
+      "content_text": "示例正文描述。",
       "author": "示例作者",
       "cover": "https://...",
       "liked_count": "12",
@@ -241,6 +265,7 @@ scripts/import_douyin_to_obsidian.sh /path/to/ObsidianVault
     {
       "aweme_id": "7659364533756038436",
       "title": "示例视频标题",
+      "content_text": "示例视频描述。",
       "author": "示例作者",
       "url": "https://www.douyin.com/video/7659364533756038436",
       "cover": "https://...",
@@ -264,7 +289,8 @@ scripts/import_douyin_to_obsidian.sh /path/to/ObsidianVault
 │ 自动滚动 + 去重 + 导出 JSON                  │
 ├─────────────────────────────────────────────┤
 │ Obsidian                                     │
-│ scripts/*.py 可选导入 Markdown               │
+│ Scrapling 可选补全小红书正文                  │
+│ scripts/*.py 生成概览并导入 Markdown          │
 └─────────────────────────────────────────────┘
 ```
 
@@ -277,7 +303,7 @@ scripts/import_douyin_to_obsidian.sh /path/to/ObsidianVault
 
 ## 已知限制
 
-- 只导出收藏列表索引，不抓正文、评论、全部图片或视频文件。
+- 扩展只导出收藏列表提供的文字；可选 Scrapling 只补全公开小红书详情页正文，不抓评论、全部图片或视频文件。
 - 抖音只读取网页端已渲染的视频卡片；网页没显示的条目不会凭空出现。
 - 小红书少数 DOM 补扫条目可能缺少 `xsec_token`。
 - 需要你在 Chrome 中保持对应平台的登录状态。
@@ -295,6 +321,7 @@ scripts/import_douyin_to_obsidian.sh /path/to/ObsidianVault
 | `extension/douyin-content-script.js` | 抖音控制面板、DOM 扫描、导出 |
 | `scripts/xhs_to_obsidian.py` | 小红书 JSON 导入 Obsidian |
 | `scripts/douyin_to_obsidian.py` | 抖音 JSON 导入 Obsidian |
+| `scripts/enrich_xhs_with_scrapling.py` | 可选：只为新增小红书收藏补全公开详情页文字 |
 | `scripts/export_xhs_chrome.sh` | 可选：自动打开小红书收藏页并触发导出 |
 | `scripts/export_douyin_chrome.sh` | 可选：自动打开抖音收藏页并触发导出 |
 | `scripts/import_xhs_to_obsidian.sh` | 可选：导入最新小红书 JSON，成功后删除该 JSON |
